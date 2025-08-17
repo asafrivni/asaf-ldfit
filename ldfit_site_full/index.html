@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LDFIT – תכנון תזונה ואימונים (אסף)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#0b0e11;--card:#141a21;--muted:#aab2bd;--text:#e6edf3;--accent:#4aa3ff;--ok:#3fb950;--warn:#f2cc60;--bad:#f85149}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:"Rubik",system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    header{position:sticky;top:0;background:rgba(11,14,17,.9);backdrop-filter: blur(6px);border-bottom:1px solid #1f2630;z-index:10}
+    .wrap{max-width:1100px;margin:0 auto;padding:16px}
+    h1{margin:8px 0 0;font-size:20px}
+    nav{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+    nav button{background:#1a212b;color:var(--text);border:1px solid #263141;padding:8px 12px;border-radius:10px;cursor:pointer}
+    nav button.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(74,163,255,.2)}
+    .card{background:var(--card);border:1px solid #223042;border-radius:14px;padding:14px;margin:14px 0}
+    table{width:100%;border-collapse:separate;border-spacing:0}
+    th,td{padding:10px 8px;border-bottom:1px dashed #2a394a;vertical-align:top}
+    th{color:var(--muted);font-weight:500;text-align:right}
+    td[contenteditable="true"]{outline:none}
+    td[contenteditable="true"]:focus{box-shadow:inset 0 0 0 2px var(--accent);border-radius:6px}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .row > .col{flex:1 1 320px}
+    .muted{color:var(--muted)}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#1e2936;border:1px solid #2a394a;color:#bcd}
+    .btn{background:#1b2734;border:1px solid #2d3a4a;color:#e6edf3;padding:8px 12px;border-radius:10px;cursor:pointer}
+    .btn.primary{border-color:var(--accent)}
+    .btn.good{border-color:var(--ok)}
+    .btn.warn{border-color:var(--warn)}
+    .btn.bad{border-color:var(--bad)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+    input,select,textarea{width:100%;background:#0f141a;border:1px solid #283243;color:var(--text);padding:8px 10px;border-radius:8px}
+    small{color:#8fa3b8}
+    footer{padding:24px 0;color:#8fa3b8}
+    .hint{font-size:12px;color:#91a4b7}
+    .section-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  </style>
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0b0e11">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div>
+        <h1>👟 LDFIT – תכנון שבועי (אסף)</h1>
+        <div class="muted">מים → חלבון → ירקות → פחמימה · שקילה פעם בשבוע · נשנוש עד 100 קל׳</div>
+      </div>
+      <div class="row" style="align-items:center">
+        <button class="btn" id="btnExportJSON">יצוא JSON</button>
+        <label class="btn" for="fileImport" style="cursor:pointer">יבוא JSON<input id="fileImport" type="file" accept=".json" style="display:none"></label>
+      </div>
+    </div>
+    <nav>
+      <button data-tab="plan" class="active">לוח אוכל</button>
+      <button data-tab="groceries">רשימת קניות</button>
+      <button data-tab="tracker">טבלת מעקב</button>
+      <button data-tab="settings">הגדרות & סינכרון</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- PLAN -->
+  <section class="card" id="tab-plan">
+    <div class="section-title">
+      <h2>לוח אוכל שבועי</h2>
+      <div class="row">
+        <button class="btn" id="btnNewWeek">התחל שבוע חדש</button>
+        <span class="pill" id="weekRangePill"></span>
+      </div>
+    </div>
+    <div class="hint">עריכה ישירה בתאים – נשמר אוטומטית</div>
+    <div id="planTable"></div>
+  </section>
+
+  <!-- GROCERIES -->
+  <section class="card" id="tab-groceries" hidden>
+    <div class="section-title">
+      <h2>רשימת קניות (נגזרת מהלוח)</h2>
+      <button class="btn" id="btnCopyGroceries">העתק</button>
+    </div>
+    <div id="groceriesTable"></div>
+    <small>כמויות הן לאחר בישול; לקנייה של חומרי גלם קח ~×1.2.</small>
+  </section>
+
+  <!-- TRACKER -->
+  <section class="card" id="tab-tracker" hidden>
+    <div class="section-title">
+      <h2>טבלת מעקב</h2>
+      <div class="row"><button class="btn good" id="btnWater1">+250 מ״ל</button><button class="btn good" id="btnWater2">+500 מ״ל</button></div>
+    </div>
+    <div id="trackerTable"></div>
+    <small>יעד שתייה יומי: 3000 מ״ל · שקילה מומלצת פעם בשבוע (ג׳–ד׳)</small>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="card" id="tab-settings" hidden>
+    <h2>הגדרות וסינכרון</h2>
+    <div class="grid">
+      <div>
+        <label>תאריך תחילת שבוע (ראשון)</label>
+        <input id="weekStart" type="date">
+        <small>משמש לחישוב התאריכים בשבוע</small>
+      </div>
+      <div>
+        <label>מצב סינכרון</label>
+        <select id="syncMode">
+          <option value="local">מקומי (LocalStorage)</option>
+          <option value="gist">GitHub Gist (לסינכרון ענן)</option>
+        </select>
+      </div>
+      <div id="gistSettings" hidden>
+        <label>GitHub Token (scope: gist)</label>
+        <input id="gistToken" type="password" placeholder="ghp_...">
+        <label>ID של Gist לקובץ הסינכרון</label>
+        <input id="gistId" placeholder="לדוגמה: a1b2c3d4e5f6...">
+        <label>שם קובץ בתוך ה-Gist</label>
+        <input id="gistFilename" placeholder="ldfit-asaf.json" value="ldfit-asaf.json">
+        <div class="row">
+          <button class="btn primary" id="btnGistPull">טען מה-Gist</button>
+          <button class="btn primary" id="btnGistPush">שמור ל-Gist</button>
+        </div>
+        <small>הטוקן לא נשמר בענן – רק בדפדפן המקומי. הכנס אותו בכל מכשיר שבו תרצה להסתנכרן.</small>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <div>נבנה קליל ונקי – ונשמר אוטומטית. אם תרצה, פרסם את התיקייה הזו ב-GitHub Pages / Netlify.</div>
+</footer>
+
+<script>
+const HE_DAYS = ["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"];
+const STORAGE_KEY = "ldfit_asaf_state_v1";
+
+// ---------- Default dataset (עם החלפת חזה הודו -> פרגית) ----------
+function sundayOf(date){
+  const d = new Date(date);
+  const day = d.getDay(); // 0=Sunday in some locales? In JS 0=Sunday
+  const diff = (day + 6) % 7; // distance from Sunday when Sunday=0 => diff=0
+  d.setDate(d.getDate() - diff);
+  d.setHours(0,0,0,0);
+  return d;
+}
+const WEEK_START = sundayOf(new Date());
+
+const defaultState = {
+  weekStart: WEEK_START.toISOString().slice(0,10),
+  plan: HE_DAYS.map((name, i) => {
+    const dt = new Date(WEEK_START); dt.setDate(dt.getDate()+i);
+    const dateStr = dt.toISOString().slice(0,10);
+    const rows = [
+      // [meal, protein, carb, veg, note]
+    ];
+    const template = [
+      // Lunch
+      ["צהריים","", "", "סלט/ירקות חופשי", ""],
+      // Dinner
+      ["ערב","", "", "סלט/ירקות/ירקות אפויים", ""],
+      // Snack
+      ["נשנוש","", "", "", "≤100 קל׳"]
+    ];
+    // Pre-fill by day
+    const byDay = [
+      // ראשון
+      [["צהריים","חזה עוף 250גר׳","אורז לבן 100גר׳","סלט חופשי","כוס מים לפני"],["ערב","סלמון 200גר׳","קינואה 100גר׳","ירקות",""],["נשנוש","","","", "יוגורט דל"]],
+      // שני (היה חזה הודו -> מחליף לפרגית)
+      [["צהריים","פרגית 250גר׳","פסטה 100גר׳","ירקות אפויים","אימון כוח"],["ערב","חזה עוף 200גר׳","בטטה 150גר׳","ירקות",""],["נשנוש","","","", "שוקולד מריר 1–2 קוביות"]],
+      // שלישי
+      [["צהריים","בקר רזה 250גר׳","בורגול 100גר׳","סלט חופשי","אירובי קל"],["ערב","דג לבן 200גר׳","אורז 100גר׳","ירקות",""],["נשנוש","","","", "פריכיות 2–3"]],
+      // רביעי
+      [["צהריים","חזה עוף 250גר׳","פיתה כוסמין 1/2","ירקות אפויים",""],["ערב","בקר רזה 200גר׳","תפוח אדמה 150גר׳","ירקות","אופציונלי: צ׳יט אחרי כוח"],["נשנוש","","","", "מעדן חלבון"]],
+      // חמישי (היה חזה הודו -> מחליף לפרגית)
+      [["צהריים","פרגית 250גר׳","קוסקוס 100גר׳","סלט חופשי","אימון כוח"],["ערב","חזה עוף 200גר׳","קינואה 100גר׳","ירקות",""],["נשנוש","","","", "קרקרים דלי קלוריות"]],
+      // שישי
+      [["צהריים","פרגית 250גר׳","אורז 100גר׳","סלט חופשי",""],["ערב","דג לבן 200גר׳","בטטה 150גר׳","ירקות","נוהל סופ״ש"],["נשנוש","","","", "יוגורט דל"]],
+      // שבת
+      [["צהריים","קציצות עוף/בקר 250גר׳","פסטה 100גר׳","סלט חופשי",""],["ערב","חזה עוף/דג 200גר׳","קוסקוס 100גר׳","ירקות",""],["נשנוש","","","", "פרי/פריכיות"]],
+    ];
+    const chosen = byDay[i];
+    return {day:name, date:dateStr, rows: chosen || template};
+  }),
+  tracker: HE_DAYS.map((name,i)=>{
+    const dt = new Date(WEEK_START); dt.setDate(dt.getDate()+i);
+    return {day:name,date:dt.toISOString().slice(0,10), water:0, protein:"", carbs:"", workout:"", steps:"", sleep:"", weight:""};
+  }),
+  sync: {mode:"local", gist:{token:"", id:"", filename:"ldfit-asaf.json"}}
+};
+
+// ---------- Persistence ----------
+function saveState(state){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+function loadState(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(!raw){ saveState(defaultState); return defaultState; }
+  try { return JSON.parse(raw); } catch(e){ console.error(e); saveState(defaultState); return defaultState; }
+}
+let state = loadState();
+
+// ---------- UI helpers ----------
+function $(sel, root=document){ return root.querySelector(sel) }
+function $all(sel, root=document){ return Array.from(root.querySelectorAll(sel)) }
+
+function renderWeekRange(){
+  const s = new Date(state.weekStart);
+  const e = new Date(s); e.setDate(e.getDate()+6);
+  $("#weekRangePill").textContent = `${s.toLocaleDateString('he-IL')} → ${e.toLocaleDateString('he-IL')}`;
+}
+
+// ---------- PLAN ----------
+function renderPlan(){
+  const container = $("#planTable");
+  const tbl = document.createElement("table");
+  const thead = document.createElement("thead");
+  thead.innerHTML = `<tr>
+    <th>יום</th><th>תאריך</th><th>ארוחה</th><th>חלבון</th><th>פחמימה</th><th>ירק</th><th>הערות</th>
+  </tr>`;
+  tbl.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  state.plan.forEach((d,di)=>{
+    d.rows.forEach((r,ri)=>{
+      const tr = document.createElement("tr");
+      if(ri===0){
+        tr.innerHTML = `<td rowspan="3"><b>${d.day}</b></td><td rowspan="3">${d.date}</td>`;
+      }
+      const meal = ri===0? "צהריים" : ri===1? "ערב" : "נשנוש";
+      const cells = [
+        meal, r[1]||"", r[2]||"", r[3]||"", r[4]||""
+      ];
+      cells.forEach((val, ci)=>{
+        const td = document.createElement("td");
+        td.textContent = val;
+        if(ci>0){ // editable all but meal name
+          td.contentEditable = "true";
+          td.addEventListener("blur", ()=>{
+            const idx = ci; // 1..4 -> maps to r[1]..r[4]
+            r[idx] = td.textContent.trim();
+            saveState(state);
+            // re-render groceries because ingredients may change
+            renderGroceries();
+          });
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  });
+  tbl.appendChild(tbody);
+  container.innerHTML = "";
+  container.appendChild(tbl);
+}
+
+// ---------- GROCERIES (aggregate) ----------
+function parseQty(text){
+  // Try to extract number and unit from common patterns: "250גר׳", "100גר׳", "1/2", "150גר׳", "1 יח׳"
+  if(!text) return null;
+  const t = text.replace(/\s+/g,'').replace(/׳/g,"");
+  // 1/2 → 0.5
+  if(/^\d+\/\d+$/.test(t)) return {qty: eval(t), unit:"יח׳"};
+  // number + גרם
+  let m = t.match(/^(\d+(?:\.\d+)?)גר.?$/);
+  if(m) return {qty: parseFloat(m[1]), unit:"גרם (אחרי בישול)"};
+  // number + יח׳
+  m = t.match(/^(\d+(?:\.\d+)?)יח.?$/);
+  if(m) return {qty: parseFloat(m[1]), unit:"יח׳"};
+  return null;
+}
+function addItem(map, name, qty, unit){
+  if(!name || !qty) return;
+  const key = name.trim();
+  if(!map[key]) map[key] = {qty:0, unit};
+  map[key].qty += qty;
+}
+function normalizeProteinName(s){
+  if(!s) return null;
+  s = s.replace(/\s+/g,' ').trim();
+  // collapse families
+  if(/חזה עוף|שניצל עוף/.test(s)) return "חזה עוף";
+  if(/פרגית/.test(s)) return "פרגית";
+  if(/הודו/.test(s)) return "חזה הודו";
+  if(/בקר|סינטה|שייטל|אנטריקוט/.test(s)) return "בקר רזה";
+  if(/סלמון/.test(s)) return "סלמון";
+  if(/דג לבן|אמנון|דניס|לברק|נסיכת/.test(s)) return "דג לבן";
+  if(/קציצות/.test(s)) return "קציצות עוף/בקר";
+  return s;
+}
+function normalizeCarbName(s){
+  if(!s) return null;
+  s = s.replace(/\s+/g,' ').trim();
+  if(/אורז/.test(s)) return "אורז מבושל";
+  if(/פסטה/.test(s)) return "פסטה מבושלת";
+  if(/קינואה/.test(s)) return "קינואה מבושלת";
+  if(/קוסקוס/.test(s)) return "קוסקוס מוכן";
+  if(/בורגול/.test(s)) return "בורגול מבושל";
+  if(/בטטה/.test(s)) return "בטטה אפויה";
+  if(/תפוח.?אדמה/.test(s)) return "תפוח אדמה אפוי";
+  if(/פיתה/.test(s)) return "פיתה כוסמין";
+  return s;
+}
+function aggregateGroceries(){
+  const map = {};
+  state.plan.forEach(d=>{
+    d.rows.forEach(r=>{
+      // protein r[1], carb r[2]
+      const p = r[1].match(/^[^0-9]+/); // name is non-digits prefix
+      if(p){
+        const name = normalizeProteinName(p[0].trim());
+        const qty = parseQty(r[1].replace(name,"").trim());
+        if(name && qty) addItem(map, name, qty.qty, qty.unit || "גרם (אחרי בישול)");
+      }
+      const c = r[2].match(/^[^0-9]+|^1\/2|^\d+\s?יח/);
+      if(c){
+        const carbName = normalizeCarbName(r[2].split(/\d/)[0].trim() || r[2]);
+        const qty = parseQty(r[2].replace(carbName,"").trim());
+        if(carbName && qty) addItem(map, carbName, qty.qty, qty.unit || "גרם (אחרי בישול)");
+      }
+      // snacks
+      const note = r[4]||"";
+      if(/יוגורט|מעדן/.test(note)) addItem(map, "יוגורט/מעדן חלבון (דל)", 1, "יח׳");
+      if(/פריכיות/.test(note)) addItem(map, "פריכיות אורז/תירס", 1, "חב׳");
+      if(/קרקר/.test(note)) addItem(map, "קרקרים דלי קלוריות", 1, "חב׳");
+      if(/שוקולד/.test(note)) addItem(map, "שוקולד מריר", 0.2, "חב׳");
+      if(/פרי/.test(note)) addItem(map, "פירות", 2, "יח׳");
+    });
+  });
+  // Veg base
+  addItem(map,"ירקות לסלט (מלפפון/עגבניה/פלפל)", 10, "יח׳ מעורב");
+  addItem(map,"עלי חסה/בייבי", 2, "חב׳");
+  addItem(map,"ירקות לתנור (קישוא/גזר/בצל)", 3, "ק\"ג");
+  addItem(map,"תבלינים/ספריי שמן", 1, "סטנדרטי");
+  // 1.2x raw-material hint is in UI only.
+  return map;
+}
+function renderGroceries(){
+  const map = aggregateGroceries();
+  const entries = Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0],'he'));
+  const container = $("#groceriesTable");
+  const tbl = document.createElement("table");
+  tbl.innerHTML = `<thead><tr><th>מוצר</th><th>כמות לשבוע</th><th>יחידה</th></tr></thead>`;
+  const tbody = document.createElement("tbody");
+  entries.forEach(([name, obj])=>{
+    const tr = document.createElement("tr");
+    const qty = Math.round((obj.qty + Number.EPSILON) * 100) / 100;
+    tr.innerHTML = `<td>${name}</td><td>${qty}</td><td>${obj.unit||""}</td>`;
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  container.innerHTML = "";
+  container.appendChild(tbl);
+}
+
+// ---------- TRACKER ----------
+function renderTracker(){
+  const container = $("#trackerTable");
+  const tbl = document.createElement("table");
+  tbl.innerHTML = `<thead><tr>
+    <th>יום</th><th>תאריך</th>
+    <th>שתייה (מ״ל, יעד 3000)</th><th>הגעתי לחלבון?</th>
+    <th>פחמימה לפי תפריט?</th><th>אימון</th><th>צעדים</th><th>שעות שינה</th><th>משקל</th>
+  </tr></thead>`;
+  const tbody = document.createElement("tbody");
+  state.tracker.forEach((t, i)=>{
+    const tr = document.createElement("tr");
+    const cols = ["day","date","water","protein","carbs","workout","steps","sleep","weight"];
+    cols.forEach((key,ci)=>{
+      const td = document.createElement("td");
+      td.textContent = t[key] ?? "";
+      if(ci>=2){ // editable, except day/date
+        td.contentEditable = "true";
+        td.addEventListener("blur", ()=>{
+          state.tracker[i][key] = td.textContent.trim();
+          saveState(state);
+        });
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  container.innerHTML = "";
+  container.appendChild(tbl);
+}
+function addWater(amount){
+  // add to today's row
+  const today = new Date().toISOString().slice(0,10);
+  const row = state.tracker.find(r=>r.date===today);
+  if(row){
+    const cur = parseInt(row.water||"0",10)||0;
+    row.water = String(cur + amount);
+    saveState(state); renderTracker();
+  }
+}
+
+// ---------- Tabs ----------
+$all("nav button").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    $all("nav button").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    const tab = btn.dataset.tab;
+    $("#tab-plan").hidden = tab!=="plan";
+    $("#tab-groceries").hidden = tab!=="groceries";
+    $("#tab-tracker").hidden = tab!=="tracker";
+    $("#tab-settings").hidden = tab!=="settings";
+  });
+});
+$("#btnWater1").addEventListener("click", ()=>addWater(250));
+$("#btnWater2").addEventListener("click", ()=>addWater(500));
+
+// ---------- Settings ----------
+function renderSettings(){
+  $("#weekStart").value = state.weekStart;
+  $("#syncMode").value = state.sync.mode || "local";
+  const gs = state.sync.gist||{token:"",id:"",filename:"ldfit-asaf.json"};
+  $("#gistSettings").hidden = state.sync.mode!=="gist";
+  $("#gistToken").value = gs.token||"";
+  $("#gistId").value = gs.id||"";
+  $("#gistFilename").value = gs.filename||"ldfit-asaf.json";
+}
+$("#weekStart").addEventListener("change", e=>{
+  state.weekStart = e.target.value;
+  // shift dates
+  const s = new Date(state.weekStart);
+  state.plan.forEach((d,i)=>{ const dt = new Date(s); dt.setDate(dt.getDate()+i); d.date = dt.toISOString().slice(0,10) });
+  state.tracker.forEach((t,i)=>{ const dt = new Date(s); dt.setDate(dt.getDate()+i); t.date = dt.toISOString().slice(0,10) });
+  saveState(state); renderWeekRange(); renderPlan(); renderTracker();
+});
+$("#syncMode").addEventListener("change", e=>{
+  state.sync.mode = e.target.value;
+  $("#gistSettings").hidden = state.sync.mode!=="gist";
+  saveState(state);
+});
+["gistToken","gistId","gistFilename"].forEach(id=>{
+  $("#"+id).addEventListener("change", e=>{
+    state.sync.gist = state.sync.gist || {};
+    state.sync.gist[id.replace("gist","").toLowerCase()] = e.target.value.trim();
+    // map: token,id,filename
+    state.sync.gist.token = $("#gistToken").value.trim();
+    state.sync.gist.id = $("#gistId").value.trim();
+    state.sync.gist.filename = $("#gistFilename").value.trim();
+    saveState(state);
+  });
+});
+
+// ---------- New week ----------
+$("#btnNewWeek").addEventListener("click", ()=>{
+  if(!confirm("לפתוח שבוע חדש (ישמור את הנתונים הקיימים לשחזור דרך JSON)?")) return;
+  const s = sundayOf(new Date());
+  const fresh = JSON.parse(JSON.stringify(defaultState));
+  fresh.weekStart = s.toISOString().slice(0,10);
+  state.plan = fresh.plan;
+  state.tracker = fresh.tracker;
+  state.weekStart = fresh.weekStart;
+  saveState(state);
+  renderWeekRange(); renderPlan(); renderGroceries(); renderTracker(); renderSettings();
+});
+
+// ---------- Copy groceries ----------
+$("#btnCopyGroceries").addEventListener("click", ()=>{
+  const map = aggregateGroceries();
+  const lines = Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0],'he')).map(([k,v])=>`• ${k}: ${Math.round(v.qty*100)/100} ${v.unit||""}`);
+  navigator.clipboard.writeText(lines.join("\n")).then(()=>{
+    alert("הרשימה הועתקה ללוח");
+  });
+});
+
+// ---------- Import/Export JSON ----------
+$("#btnExportJSON").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ldfit-asaf.json";
+  a.click();
+});
+$("#fileImport").addEventListener("change", async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const text = await file.text();
+  try{
+    const obj = JSON.parse(text);
+    state = obj; saveState(state);
+    renderWeekRange(); renderPlan(); renderGroceries(); renderTracker(); renderSettings();
+    alert("נטען בהצלחה");
+  }catch(err){ alert("קובץ לא תקין"); }
+});
+
+// ---------- Gist Sync ----------
+async function gistFetch(method, path, body, token){
+  const res = await fetch(`https://api.github.com${path}`, {
+    method,
+    headers:{
+      "Accept":"application/vnd.github+json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if(!res.ok){
+    const t = await res.text();
+    throw new Error(`GitHub API ${res.status}: ${t}`);
+  }
+  return res.json();
+}
+$("#btnGistPull").addEventListener("click", async ()=>{
+  try{
+    const {token,id,filename} = state.sync.gist;
+    if(!token||!id||!filename) throw new Error("חסר token/id/filename");
+    const data = await gistFetch("GET", `/gists/${id}`, null, token);
+    const file = data.files[filename];
+    if(!file) throw new Error("הקובץ לא נמצא בתוך ה-Gist");
+    const content = file.content;
+    const obj = JSON.parse(content);
+    state = obj; saveState(state);
+    renderWeekRange(); renderPlan(); renderGroceries(); renderTracker(); renderSettings();
+    alert("נטען מה-Gist");
+  }catch(e){ alert("שגיאה: " + e.message); }
+});
+$("#btnGistPush").addEventListener("click", async ()=>{
+  try{
+    const {token,id,filename} = state.sync.gist;
+    if(!token||!id||!filename) throw new Error("חסר token/id/filename");
+    const body = { files: {} };
+    body.files[filename] = { content: JSON.stringify(state,null,2) };
+    await gistFetch("PATCH", `/gists/${id}`, body, token);
+    alert("נשמר ל-Gist");
+  }catch(e){ alert("שגיאה: " + e.message); }
+});
+
+// ---------- Initial render ----------
+renderWeekRange();
+renderPlan();
+renderGroceries();
+renderTracker();
+renderSettings();
+</script>
+
+<script>
+// Register Service Worker for offline + PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('./service-worker.js').catch(console.error);
+  });
+}
+</script>
+</body>
+</html>
